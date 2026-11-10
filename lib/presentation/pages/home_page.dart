@@ -11,12 +11,14 @@ import 'package:emi_manager/logic/currency_provider.dart';
 import 'package:emi_manager/logic/emis_provider.dart';
 import 'package:emi_manager/logic/tags_provider.dart';
 import 'package:emi_manager/presentation/constants.dart';
+import 'package:emi_manager/presentation/pages/csv_mapping_screen.dart';
 import 'package:emi_manager/presentation/pages/home/logic/home_state_provider.dart';
 import 'package:emi_manager/presentation/pages/home/widgets/tags_strip.dart';
 import 'package:emi_manager/presentation/pages/new_emi_page.dart';
 import 'package:emi_manager/presentation/router/routes.dart';
 import 'package:emi_manager/presentation/widgets/home_bar_graph.dart';
 import 'package:emi_manager/presentation/widgets/formatted_amount.dart';
+import 'package:emi_manager/services/transaction_csv_service.dart';
 import 'package:emi_manager/utils/global_formatter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:emi_manager/presentation/l10n/app_localizations.dart';
@@ -491,30 +493,31 @@ class HomePageState extends ConsumerState<HomePage> {
         String tagJson = json.encode(tagMapList);
         String tags = tagJson;
         csvData.add([
-          emi.id.toString(),
-          emi.title,
-          emi.emiType,
-          emi.principalAmount.toString(),
-          emi.interestRate.toString(),
-          emi.startDate.toIso8601String(),
-          emi.endDate?.toIso8601String() ?? '',
-          emi.contactPersonName,
-          emi.contactPersonPhone,
-          emi.contactPersonEmail,
-          emi.otherInfo,
-          emi.processingFee.toString(),
-          emi.otherCharges.toString(),
-          emi.partPayment.toString(),
-          emi.advancePayment.toString(),
-          emi.insuranceCharges.toString(),
-          (emi.moratorium ?? false) ? "Yes" : "No",
-          emi.moratoriumMonth.toString(),
-          emi.moratoriumType ?? '',
-          emi.monthlyEmi.toString(),
-          emi.totalEmi.toString(),
-          emi.paid.toString(),
-          tags, // Join tags list as a comma-separated string
+          emi.id.toString(),                         // ID
+          emi.title,                                // Title
+          emi.emiType,                              // EMI Type
+          emi.principalAmount.toString(),           // Principal Amount
+          emi.interestRate.toString(),              // Interest Rate
+          emi.startDate.toIso8601String(),           // Start Date
+          emi.endDate?.toIso8601String() ?? '',      // End Date
+          emi.monthlyEmi?.toString() ?? '',          // Monthly EMI
+          emi.totalEmi?.toString() ?? '',            // Total EMI
+          emi.paid?.toString() ?? '',                // Paid
+          emi.contactPersonName,                    // Contact Person Name
+          emi.contactPersonPhone,                   // Contact Person Phone
+          emi.contactPersonEmail,                   // Contact Person Email
+          emi.otherInfo,                            // Other Info
+          emi.processingFee?.toString() ?? '',       // Processing Fee
+          emi.otherCharges?.toString() ?? '',        // Other Charges
+          emi.partPayment?.toString() ?? '',         // Part Payment
+          emi.advancePayment?.toString() ?? '',      // Advance Payment
+          emi.insuranceCharges?.toString() ?? '',    // Insurance Charges
+          (emi.moratorium ?? false) ? "Yes" : "No",  // Moratorium
+          emi.moratoriumMonth?.toString() ?? '',     // Moratorium Month
+          emi.moratoriumType ?? '',                  // Moratorium Type
+          tags,                                     // Tags
         ]);
+
       }
       var status = await Permission.storage.status;
       if (!status.isGranted) {
@@ -579,6 +582,11 @@ class HomePageState extends ConsumerState<HomePage> {
 
   // Function to import CSV data and map it to your Payment model
   Future<void> importPaymentsFromCSV(BuildContext context) async {
+    // Close drawer if this was triggered from it
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+    }
+
     try {
       // File picker to allow user to select CSV file
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -620,6 +628,11 @@ class HomePageState extends ConsumerState<HomePage> {
           } catch (e) {
             print("Error parsing tags: $e");
           }
+          // Map CSV columns to Emi fields according to export format
+          // Export order: ID, Title, EMI Type, Principal, Interest, Start Date, End Date,
+          // Monthly EMI, Total EMI, Paid, Contact Name, Contact Phone, Contact Email,
+          // Other Info, Processing Fee, Other Charges, Part Payment, Advance Payment,
+          // Insurance Charges, Moratorium, Moratorium Month, Moratorium Type, Tags
           Emi SingleEmi = Emi(
             id: row[0].toString(),
             title: row[1].toString(),
@@ -628,21 +641,21 @@ class HomePageState extends ConsumerState<HomePage> {
             interestRate: double.tryParse(row[4].toString()) ?? 0.0,
             startDate: DateTime.parse(row[5].toString()),
             endDate: DateTime.parse(row[6].toString()),
-            contactPersonName: row[7].toString(),
-            contactPersonPhone: row[8].toString(),
-            contactPersonEmail: row[9].toString(),
-            otherInfo: row[10].toString(),
-            processingFee: double.tryParse(row[11].toString()),
-            otherCharges: double.tryParse(row[12].toString()),
-            partPayment: double.tryParse(row[13].toString()),
-            advancePayment: double.tryParse(row[14].toString()),
-            insuranceCharges: double.tryParse(row[15].toString()),
-            moratorium: (row[16].toString() == "Yes" ? true : false),
-            moratoriumMonth: int.tryParse(row[17].toString()),
-            moratoriumType: row[18].toString(),
-            monthlyEmi: double.tryParse(row[19].toString()),
-            totalEmi: double.tryParse(row[20].toString()),
-            paid: double.tryParse(row[21].toString()),
+            monthlyEmi: double.tryParse(row[7].toString()),
+            totalEmi: double.tryParse(row[8].toString()),
+            paid: double.tryParse(row[9].toString()),
+            contactPersonName: row[10].toString(),
+            contactPersonPhone: row[11].toString(),
+            contactPersonEmail: row[12].toString(),
+            otherInfo: row[13].toString(),
+            processingFee: double.tryParse(row[14].toString()),
+            otherCharges: double.tryParse(row[15].toString()),
+            partPayment: double.tryParse(row[16].toString()),
+            advancePayment: double.tryParse(row[17].toString()),
+            insuranceCharges: double.tryParse(row[18].toString()),
+            moratorium: (row[19].toString() == "Yes" ? true : false),
+            moratoriumMonth: int.tryParse(row[20].toString()),
+            moratoriumType: row[21].toString(),
             tags: tags,
           );
           ref.read(emisNotifierProvider.notifier).add(SingleEmi);
@@ -652,7 +665,7 @@ class HomePageState extends ConsumerState<HomePage> {
           //refresh the ui
         });
 
-        Navigator.of(context).pop(); //pop the drawer
+        //Navigator.of(context).pop(); //pop the drawer
         // Show a confirmation message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Payments imported successfully!')),
@@ -667,152 +680,142 @@ class HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _importTransactionsCSV() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    try {
+      final csvService = TransactionCsvService();
 
-    if (result != null) {
-      final file = File(result.files.single.path!);
-      final content = await file.readAsString();
-      List<List<dynamic>> csv = [];
-      try {
-        csv = CsvToListConverter(
-                eol: '\n', fieldDelimiter: ',', textDelimiter: '"')
-            .convert(content);
-      } catch (e) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Invalid CSV format.")));
-        return;
-      }
+      // 1. Pick CSV
+      final platformFile = await csvService.pickCsvFile();
+      if (platformFile == null || !mounted) return;
 
-      final List<Map<String, dynamic>> transactions = [];
-      final Set<String> groupTags = {};
-      final Set<String> seenTagsLowercase = {};
-
-      for (int i = 1; i < csv.length; i++) {
-        final row = csv[i];
-        final originalTag = row[4].toString().trim();
-        final lowerTag = originalTag.toLowerCase();
-
-        // Clean amounts by removing quotes and commas
-        final debitStr =
-            row[0].toString().replaceAll(RegExp(r'[",]'), '').trim();
-        final creditStr =
-            row[1].toString().replaceAll(RegExp(r'[",]'), '').trim();
-
-        transactions.add({
-          'debit': double.tryParse(debitStr) ?? 0,
-          'credit': double.tryParse(creditStr) ?? 0,
-          'date': row[2],
-          'title': row[3],
-          'group_tag': originalTag,
-        });
-        if (!seenTagsLowercase.contains(lowerTag)) {
-          groupTags.add(originalTag);
-          seenTagsLowercase.add(lowerTag);
-        }
-      }
-
-      // Automap group_tags to existing EMI groupTag (not Tag box)
-      final loanLendBox = Hive.box<Emi>('emis');
-      final Map<String, String> autoMapped = {};
-      final List<String> tagsToMap = [];
-      for (final tag in groupTags) {
-        final isCredit = transactions.any(
-          (tx) => tx['group_tag'] == tag && (tx['credit'] ?? 0) > 0,
-        );
-        final matchingEmis = loanLendBox.values.where((emi) {
-          final hasMatchingTag = emi.tags.any(
-            (t) => t.name.trim().toLowerCase() == tag.trim().toLowerCase(),
-          );
-          return hasMatchingTag &&
-              ((isCredit && emi.emiType == 'lend') ||
-                  (!isCredit && emi.emiType == 'loan'));
-        }).toList();
-
-        if (matchingEmis.isNotEmpty) {
-          for (final emi in matchingEmis) {
-            autoMapped['${tag}_${emi.id}'] = emi.id;
-          }
-        } else {
-          tagsToMap.add(tag);
-        }
-      }
-      final Map<String, String?> manualMapped =
-          await _promptUserForMappings(transactions, tagsToMap);
-      final Map<String, String?> mapping = {...autoMapped, ...manualMapped};
-      if (mapping.values.any((v) => v == null)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please map all group tags.")),
-        );
-        return;
-      }
-
-      for (final row in transactions) {
-        final debit = row['debit'] as double;
-        final credit = row['credit'] as double;
-        double amount = 0;
-        String transactionType = '';
-
-        if (credit > 0) {
-          amount = credit;
-          transactionType = 'CR';
-        } else if (debit > 0) {
-          amount = debit;
-          transactionType = 'DR';
-        } else {
-          // Skip if both are zero or blank
-          continue;
-        }
-        if (amount == 0) {
-          print("Skipping empty transaction with 0 amount: ${row['title']}");
-          continue;
-        }
-
-        final date = DateFormat('dd-MMM-yyyy').parse(row['date']);
-        final tag = row['group_tag'].toString().trim();
-        final matchedEmis = loanLendBox.values.where((emi) {
-          final matchesTag = emi.tags.any(
-            (t) => t.name.trim().toLowerCase() == tag.toLowerCase(),
-          );
-          final isMappedEmi = mapping[tag] == emi.id;
-
-          // Use transactionType for logic
-          final matchLoan = transactionType == 'DR' && emi.emiType == 'loan';
-          final matchLend = transactionType == 'CR' && emi.emiType == 'lend';
-
-          return (matchLoan || matchLend) && (matchesTag || isMappedEmi);
-        }).toList();
-
-        if (matchedEmis.isEmpty) {
-          continue;
-        }
-
-        final addedEmiIds = <String>{};
-        for (final emi in matchedEmis) {
-          final isMappedEmi = mapping[tag] == emi.id;
-          final hasTag = emi.tags
-              .any((t) => t.name.trim().toLowerCase() == tag.toLowerCase());
-
-          if ((isMappedEmi || hasTag) && !addedEmiIds.contains(emi.id)) {
-            final transaction = Transaction(
-              id: const Uuid().v4(),
-              title: row['title'].toString(),
-              description: '',
-              amount: amount,
-              type: transactionType, // Use the calculated type
-              datetime: date,
-              loanLendId: emi.id,
-            );
-            ref.read(transactionsNotifierProvider.notifier).add(transaction);
-            addedEmiIds.add(emi.id);
-          }
-        }
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Transactions imported from CSV")),
+      // 2. Show blocking loader
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Importing transactions...'),
+            ],
+          ),
+        ),
       );
+
+
+      // 3. Extract headers
+      final headers = await csvService.extractCsvHeaders(platformFile);
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pop(); // close FIRST loader
+
+      // 4. Mapping screen
+      final fieldMapping = await Navigator.push<Map<String, String>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CsvMappingScreen(
+            csvHeaders: headers,
+            onMappingComplete: (_) {}, // DO NOTHING
+          ),
+        ),
+      );
+
+      if (fieldMapping == null || !mounted) return;
+
+      // 5. Select EMI
+      final loanLendBox = Hive.box<Emi>('emis');
+      final allEmis = loanLendBox.values.toList();
+
+      if (allEmis.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please create a Loan or Lend first')),
+          );
+        }
+        return;
+      }
+
+      final selectedEmi = await showDialog<Emi>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Loan/Lend'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: allEmis.length,
+              itemBuilder: (_, i) => ListTile(
+                title: Text(allEmis[i].title),
+                subtitle: Text('Type: ${allEmis[i].emiType}'),
+                onTap: () => Navigator.pop(context, allEmis[i]),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      if (selectedEmi == null || !mounted) return;
+
+      // 6. Show save loader
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // 7. Parse CSV
+      final transactions = await csvService.parseTransactionsCsv(
+        platformFile,
+        fieldMapping,
+        selectedEmi.id,
+      );
+
+      if (!mounted) return;
+
+      // Close the loader before showing results
+      Navigator.of(context, rootNavigator: true).pop();
+
+      // 8. Validate and save transactions
+      if (transactions.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No valid transactions found in CSV. Check that debit/credit columns have valid amounts.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Use batch insert to avoid multiple rebuilds
+      await ref.read(transactionsNotifierProvider.notifier).addBatch(transactions);
+
+      // 9. Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully imported ${transactions.length} transactions'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+     if (mounted) {
+  Navigator.of(context, rootNavigator: true).pop();
+}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error importing CSV: $e')),
+        );
+      }
     }
   }
+
 
   Future<Map<String, String?>> _promptUserForMappings(
       List<Map<String, dynamic>> transactions, List<String> tags) async {
@@ -924,6 +927,7 @@ class HomePageState extends ConsumerState<HomePage> {
                 Padding(
                   padding: const EdgeInsets.all(10),
                   child: FloatingActionButton.extended(
+                    heroTag: null,
                     onPressed: () {
                       showCurrencyPicker(
                         context: context,
@@ -945,6 +949,7 @@ class HomePageState extends ConsumerState<HomePage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 0, left: 10, right: 10),
                   child: FloatingActionButton.extended(
+                    heroTag: null,
                     onPressed: () {
                       importPaymentsFromCSV(context);
                     },
@@ -956,6 +961,7 @@ class HomePageState extends ConsumerState<HomePage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 10, left: 10, right: 10),
                   child: FloatingActionButton.extended(
+                    heroTag: null,
                     onPressed: _importTransactionsCSV,
                     backgroundColor:
                         loanColor(context, false), // same color as Import CSV
@@ -1168,6 +1174,7 @@ class HomePageState extends ConsumerState<HomePage> {
               Padding(
                 padding: const EdgeInsets.all(10),
                 child: FloatingActionButton.extended(
+                  heroTag: null,
                   onPressed: () {
                     showCurrencyPicker(
                       context: context,
@@ -1189,6 +1196,7 @@ class HomePageState extends ConsumerState<HomePage> {
               Padding(
                 padding: const EdgeInsets.only(top: 0, left: 10, right: 10),
                 child: FloatingActionButton.extended(
+                  heroTag: null,
                   onPressed: () {
                     importPaymentsFromCSV(context);
                   },
@@ -1200,6 +1208,7 @@ class HomePageState extends ConsumerState<HomePage> {
               Padding(
                 padding: const EdgeInsets.only(top: 10, left: 10, right: 10),
                 child: FloatingActionButton.extended(
+                  heroTag: null,
                   onPressed: _importTransactionsCSV,
                   backgroundColor:
                       loanColor(context, false), // same color as Import CSV
@@ -1362,6 +1371,7 @@ class HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             FloatingActionButton.extended(
+              heroTag: null,
               onPressed: () {
                 _triggerComparisonLottie(); // Trigger comparison animation
                 exportToCSV(context, allEmis);
@@ -1618,7 +1628,8 @@ class EmiCard extends ConsumerWidget {
                         final emiId = emi.id;
                         final emiType = emi.emiType;
                         GoRouter.of(context).go(
-                            NewEmiRoute(emiType: emiType, emiId: emiId).location);
+                            NewEmiRoute(emiType: emiType, emiId: emiId)
+                                .location);
                       } else if (value == 'delete') {
                         _deleteEmi(context, ref, emi);
                       } else if (value == 'duplicate') {
@@ -1626,7 +1637,9 @@ class EmiCard extends ConsumerWidget {
                         final duplicatedEmi = emi.duplicate();
 
                         // Add to your main EMI list (using emiType if needed)
-                        await ref.read(emisNotifierProvider.notifier).add(duplicatedEmi);
+                        await ref
+                            .read(emisNotifierProvider.notifier)
+                            .add(duplicatedEmi);
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Item duplicated!')),
